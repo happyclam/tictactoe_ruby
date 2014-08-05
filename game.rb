@@ -91,10 +91,6 @@ class Board < Array
     }
   end
 
-  def [](i)
-    super(i)
-  end
-
 end
 
 class Player
