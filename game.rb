@@ -91,6 +91,10 @@ class Board < Array
     }
   end
 
+  # def [](i)
+  #   super(i)
+  # end
+
 end
 
 class Player
@@ -173,10 +177,12 @@ class Player
       if (temp_v > value && turn == CROSS) 
         value = temp_v 
         locate = i
+        #beta-cut
         return value, locate if threshold < temp_v
       elsif (temp_v < value && turn == NOUGHT)
         value = temp_v 
         locate = i
+        #alpha-cut
         return value, locate if threshold > temp_v
       end
 

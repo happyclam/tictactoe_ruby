@@ -1,3 +1,4 @@
 tictactoe_ruby
 ==============
-TicTacToe game in Ruby as sample for min-max & alpha-beta method
+Tic Tac Toe game in Ruby as sample for min-max algorithm & alpha-beta method
+
