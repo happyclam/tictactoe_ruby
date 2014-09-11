@@ -178,12 +178,12 @@ class Player
         value = temp_v 
         locate = i
         #beta-cut
-        return value, locate if threshold < temp_v
+        break if threshold < temp_v
       elsif (temp_v < value && turn == NOUGHT)
         value = temp_v 
         locate = i
         #alpha-cut
-        return value, locate if threshold > temp_v
+        break if threshold > temp_v
       end
 
     }
