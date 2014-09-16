@@ -17,21 +17,6 @@ class Game
     @counter = 0
   end
 
-  def display
-    print " "
-    "a".ord.step("a".ord + 3 - 1, 1){|row| print " " + " "}
-    print "\n"
-    board.each_with_index{|b, i|
-      print " |" if (i % 3) == 0
-      print n2c(i) + "|" 
-      print "\n" if (i % 3) == 2
-    }
-  end
-
-  def droppable
-    return (@board.select{|b| !b}.size != 0)
-  end
-
   def command(player)
     threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
     temp_v, locate = player.lookahead(@board, player.sengo, @counter, threshold)    
@@ -55,17 +40,6 @@ class Game
     }
   end
 
-  private
-  def n2c(idx)
-    case @board[idx]
-    when CROSS
-      "X"
-    when NOUGHT
-      "O"
-    else
-      (idx + 1).to_s
-    end
-  end
 end
 
 class Board < Array
@@ -95,6 +69,32 @@ class Board < Array
   #   super(i)
   # end
 
+  def droppable
+    return (self.select{|b| !b}.size != 0)
+  end
+
+  def display
+    print " "
+    "a".ord.step("a".ord + 3 - 1, 1){|row| print " " + " "}
+    print "\n"
+    self.each_with_index{|b, i|
+      print " |" if (i % 3) == 0
+      print n2c(i) + "|" 
+      print "\n" if (i % 3) == 2
+    }
+  end
+
+  private
+  def n2c(idx)
+    case self[idx]
+    when CROSS
+      "X"
+    when NOUGHT
+      "O"
+    else
+      (idx + 1).to_s
+    end
+  end
 end
 
 class Player
@@ -177,12 +177,12 @@ class Player
       if (temp_v > value && turn == CROSS) 
         value = temp_v 
         locate = i
-        #beta-cut
+        #beta-beta-cut
         break if threshold < temp_v
       elsif (temp_v < value && turn == NOUGHT)
         value = temp_v 
         locate = i
-        #alpha-cut
+        #alpha-beta-cut
         break if threshold > temp_v
       end
 
@@ -219,10 +219,10 @@ else
 end
 
 g = Game.new
-g.display
+g.board.display
 if @gote_player.human
   g.command(@sente_player)
-  g.display
+  g.board.display
   g.counter += 1
 end
 
@@ -233,18 +233,18 @@ while !@game_end
   input = gets
   g.board[input.to_i - 1] = @human.sengo
   g.counter += 1
-  g.display
+  g.board.display
   unless g.command(@CPU)
     print "pass!\n"
-    @game_end = true unless g.droppable
+    @game_end = true unless g.board.droppable
   else
     g.counter += 1
-    unless g.droppable
-      g.display
+    unless g.board.droppable
+      g.board.display
       break
     end
   end
-  g.display
+  g.board.display
 end
 #-------------------------------------------------------
 print "Game End!\n"
