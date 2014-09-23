@@ -1,26 +1,16 @@
 #-*- coding: utf-8 -*-
-
-NOUGHT = -1
-CROSS = 1
-DRAW = 0
-MAX_VALUE = 9
-MIN_VALUE = -9
-SIZE = 9
-LIMIT = 9
+require "pry"
 
 class Game
   attr_accessor :board
-  attr_accessor :counter
 
   def initialize
     @board = Board.new([nil, nil, nil, nil, nil, nil, nil, nil, nil])
-    @counter = 0
   end
 
   def command(player)
     threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-    temp_v, locate = player.lookahead(@board, player.sengo, @counter, threshold)    
-#p "temp_v="+temp_v.to_s+":locate="+locate.to_s
+    temp_v, locate = player.lookahead(@board, player.sengo, threshold)    
     if locate
       @board[locate] = player.sengo
       return true
@@ -30,13 +20,28 @@ class Game
 
   end
 
-  def start(player)
-    (0..(SIZE - 1)).each{|n|
+  def test(player)
+    first = true
+    moves = 0
+    board.each_with_index {|b, n|
       @board.init
-      @board[n] = CROSS
+      @board[4] = CROSS
+      # @board[6] = NOUGHT
+      # @board[4] = CROSS
+      # @board[8] = NOUGHT
+      if first
+        @board.display
+        first = false
+        moves = @board.select{|b| b != nil }.size + 1
+      end
+      next if board[n]
+#      @board[n] = CROSS
+      @board[n] = NOUGHT
+      player.sengo = (@board[n] == CROSS) ? NOUGHT : CROSS
       threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-      temp_v, locate = player.lookahead(@board, NOUGHT, 1, threshold)
-      printf("初手 %d: 評価値: %d\n", n, temp_v)
+#      temp_v, locate = player.lookahead(@board, NOUGHT, threshold)
+      temp_v, locate = player.lookahead(@board, CROSS, threshold)
+      printf("%d手目: %d 評価値: %d\n", moves, n + 1, temp_v)
     }
   end
 
@@ -70,7 +75,14 @@ class Board < Array
   # end
 
   def droppable
-    return (self.select{|b| !b}.size != 0)
+    return false if (self.select{|b| !b}.size == 0)
+    self.line.each {|l|
+      piece = self[l[0]]
+      if (piece && piece == self[l[1]] && piece == self[l[2]])
+        return false
+      end
+    }
+    return true
   end
 
   def display
@@ -105,44 +117,6 @@ class Player
     @sengo = sengo
   end
 
-  def evaluation(board)
-    board.line.each {|l|
-      piece = board[l[0]]
-      if (piece && piece == board[l[1]] && piece == board[l[2]])
-        return (piece == NOUGHT) ? MIN_VALUE : MAX_VALUE
-#        return (piece == NOUGHT) ? MAX_VALUE : MIN_VALUE
-      end
-    }
-    return DRAW
-  end
-
-  def evaluate(board)
-    cross = 0
-    nought = 0
-    board.line.each {|l|
-      pieces = []
-      pieces << board[l[0]]
-      pieces << board[l[1]]
-      pieces << board[l[2]]
-
-      case pieces.select{|p| p == nil}.size
-      when 2
-        if pieces.index(CROSS)
-          cross += 1
-        elsif pieces.index(NOUGHT)
-          nought += 1
-        end
-      when 1
-        if pieces.index(CROSS)
-          cross += 1
-        elsif pieces.index(NOUGHT)
-          nought += 1
-        end
-      end
-    }
-    return (cross - nought)
-  end
-
   def byweight(board)
     cross = 0
     nought = 0
@@ -156,7 +130,38 @@ class Player
     return (cross - nought)
   end
 
-  def lookahead(board, turn, cnt, threshold)
+  #勝負がついたか、置き場所が無くなったらtrueを返す
+  def check(board)
+    return true if (board.select{|b| !b}.size == 0)
+    board.line.each {|l|
+      piece = board[l[0]]
+      if (piece && piece == board[l[1]] && piece == board[l[2]])
+        return true
+      end
+    }
+    return false
+  end
+
+  def evaluation(board)
+    cross_win = false
+    nought_win = false
+    board.line.each {|l|
+      piece = board[l[0]]
+      if (piece && piece == board[l[1]] && piece == board[l[2]])
+        cross_win = true if (piece == CROSS) 
+        nought_win = true if (piece == NOUGHT) 
+      end
+    }
+    if (cross_win && !nought_win)
+      return MAX_VALUE
+    elsif (nought_win && !cross_win)
+      return MIN_VALUE
+    else
+      return DRAW
+    end
+  end
+
+  def lookahead(board, turn, threshold)
     if turn == CROSS
       value = MIN_VALUE
     else
@@ -166,23 +171,23 @@ class Player
     board.each_with_index {|b, i|
       next if b
       board[i] = turn
-      temp_v = evaluation(board)
-#      temp_v = evaluate(board)
-#      temp_v = byweight(board)
-      teban = (turn == CROSS) ? NOUGHT : CROSS
-      if (temp_v != MAX_VALUE && temp_v != MIN_VALUE && cnt < LIMIT - 1)
-        temp_v, temp_locate = lookahead(board, teban, cnt + 1, temp_v)
+#board.display
+#p "cnt="+cnt.to_s+":turn="+((turn == CROSS) ? "X" : "O")+":v="+temp_v.to_s+":i="+i.to_s
+      if !check(board)
+        teban = (turn == CROSS) ? NOUGHT : CROSS
+        temp_v, temp_locate = lookahead(board, teban, value) 
+      else
+        temp_v = evaluation(board)
       end
+#binding.pry
       board[i] = nil
-      if (temp_v > value && turn == CROSS) 
+      if (temp_v >= value && turn == CROSS) 
         value = temp_v 
         locate = i
-        #beta-beta-cut
         break if threshold < temp_v
-      elsif (temp_v < value && turn == NOUGHT)
+      elsif (temp_v <= value && turn == NOUGHT)
         value = temp_v 
         locate = i
-        #alpha-beta-cut
         break if threshold > temp_v
       end
 
@@ -192,60 +197,4 @@ class Player
   end
 
 end
-
-#----------------------------
-# system('date')
-# g = Game.new
-# p = Player.new(NOUGHT, false)
-# g.start(p)
-# system('date')
-# exit
-#----------------------------
-
-begin
-  print "First?(y/n)："
-  @first = gets
-end until @first[0].upcase == "Y" || @first[0].upcase == "N"
-if @first[0].upcase == "Y"
-  @sente_player = Player.new(CROSS, true)
-  @gote_player = Player.new(NOUGHT, false)
-  @human = @sente_player
-  @CPU = @gote_player
-else
-  @sente_player = Player.new(CROSS, false)
-  @gote_player = Player.new(NOUGHT, true)
-  @human = @gote_player
-  @CPU = @sente_player
-end
-
-g = Game.new
-g.board.display
-if @gote_player.human
-  g.command(@sente_player)
-  g.board.display
-  g.counter += 1
-end
-
-
-@game_end = false
-while !@game_end
-  print "数字を入力後Enterキーを押してください："
-  input = gets
-  g.board[input.to_i - 1] = @human.sengo
-  g.counter += 1
-  g.board.display
-  unless g.command(@CPU)
-    print "pass!\n"
-    @game_end = true unless g.board.droppable
-  else
-    g.counter += 1
-    unless g.board.droppable
-      g.board.display
-      break
-    end
-  end
-  g.board.display
-end
-#-------------------------------------------------------
-print "Game End!\n"
 
