@@ -1,4 +1,5 @@
 #-*- coding: utf-8 -*-
+require "./constant.rb"
 require "pry"
 
 class Game
@@ -10,9 +11,9 @@ class Game
 
   def command(player)
     threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-    temp_v, locate = player.lookahead(@board, player.sengo, threshold)    
+    temp_v, locate = player.lookahead(@board, player.sengo, 0, threshold)
     if locate
-      @board[locate] = player.sengo
+      @board.set(locate, player.sengo)
       return true
     else
       return false
@@ -23,26 +24,34 @@ class Game
   def test(player)
     first = true
     moves = 0
+    total = 0
     board.each_with_index {|b, n|
+      total += @board.counter
       @board.init
-      # @board[4] = CROSS
-      # @board[6] = NOUGHT
-      # @board[4] = CROSS
-      # @board[8] = NOUGHT
-      if first
+      @board.set(1, CROSS); @board.set_dup(CROSS)
+      # @board.set(8, NOUGHT); @board.set_dup(NOUGHT)
+      # @board.set(4, CROSS); @board.set_dup(CROSS)
+      # @board.set(4, NOUGHT); @board.set_dup(NOUGHT)
+      # @board.set(6, CROSS); @board.set_dup(CROSS)
+      # @board.set(8, NOUGHT); @board.set_dup(NOUGHT)
+      # @board.set(0, CROSS); @board.set_dup(CROSS)
+      # @board.set(3, NOUGHT); @board.set_dup(NOUGHT)
+      next if board[n]
+      if first 
         @board.display
         first = false
         moves = @board.select{|b| b != nil }.size + 1
       end
-      next if board[n]
-      @board[n] = CROSS
-#      @board[n] = NOUGHT
+#      @board.set(n, CROSS); @board.set_dup(CROSS)
+      @board.set(n, NOUGHT); @board.set_dup(NOUGHT)
       player.sengo = (@board[n] == CROSS) ? NOUGHT : CROSS
       threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-      temp_v, locate = player.lookahead(@board, NOUGHT, threshold)
-#      temp_v, locate = player.lookahead(@board, CROSS, threshold)
+#      temp_v, locate = player.lookahead(@board, NOUGHT, 0, threshold)
+      temp_v, locate = player.lookahead(@board, CROSS, 0, threshold)
       printf("%d手目: %d 評価値: %d\n", moves, n + 1, temp_v)
+#p @board.counter
     }
+#p total
   end
 
 end
@@ -50,6 +59,8 @@ end
 class Board < Array
   attr_reader :line
   attr_reader :weight
+  attr_accessor :counter
+  attr_accessor :hist
   def initialize(*args, &block)
     super(*args, &block)
     @line = []
@@ -62,17 +73,81 @@ class Board < Array
     @line << [0, 4, 8]
     @line << [2, 4, 6]
     @weight = [1, 0, 1, 0, 2, 0, 1, 0, 1]
+    @c_q = Array.new
+    @c_bk = Array.new
+    @n_q = Array.new
+    @n_bk = Array.new
+    @duplication = Hash.new
+    @counter = 0
+    @hist = Array.new
   end
 
   def init
     self.each_with_index {|n, i|
       self[i] = nil
     }
+    @c_q.clear
+    @c_bk.clear
+    @n_q.clear
+    @n_bk.clear
+    @duplication.clear
+    @counter = 0
+    @hist.clear
   end
 
-  # def [](i)
-  #   super(i)
-  # end
+  def check_dup(sengo)
+    temp = self.dup
+    temp.unshift(sengo)
+    return @duplication.has_key?(temp.hash)
+  end
+
+  def set_dup(sengo)
+    temp = self.dup
+    temp.unshift(sengo)
+    @duplication[(temp).hash] = temp
+  end
+
+  def set(i, v)
+    if self[i] || (i > 8) || (i < 0)
+      raise "Error!"
+    else
+      self[i] = v
+    end
+    if v == CROSS
+      @c_q << i
+      if @c_q.size > 3
+        idx = @c_q.shift
+        @c_bk.push([idx, self[idx]])
+        self[idx] = nil
+      end
+    elsif v == NOUGHT
+      @n_q << i
+      if @n_q.size > 3
+        idx = @n_q.shift
+        @n_bk.push([idx, self[idx]])
+        self[idx] = nil
+      end
+    end
+  end
+
+  def unset(v)
+    if v == CROSS
+      if @c_bk.size > 0
+        h = Hash[*(@c_bk.pop)]
+        temp = h.each{|k, v| self[k] = v}
+        @c_q.unshift(temp.keys[0])
+      end
+      idx = @c_q.pop
+    elsif v == NOUGHT
+      if @n_bk.size > 0
+        h = Hash[*(@n_bk.pop)]
+        temp = h.each{|k, v| self[k] = v}
+        @n_q.unshift(temp.keys[0])
+      end
+      idx = @n_q.pop
+    end
+    self[idx] = nil
+  end
 
   def droppable
     return false if (self.select{|b| !b}.size == 0)
@@ -143,6 +218,7 @@ class Player
   end
 
   def evaluation(board)
+    board.counter += 1
     cross_win = false
     nought_win = false
     board.line.each {|l|
@@ -161,7 +237,7 @@ class Player
     end
   end
 
-  def lookahead(board, turn, threshold)
+  def lookahead(board, turn, cnt, threshold)
     if turn == CROSS
       value = MIN_VALUE
     else
@@ -170,31 +246,33 @@ class Player
     locate = nil
     board.each_with_index {|b, i|
       next if b
-      board[i] = turn
-#board.display
-#p "cnt="+cnt.to_s+":turn="+((turn == CROSS) ? "X" : "O")+":v="+temp_v.to_s+":i="+i.to_s
-      if !check(board)
-        teban = (turn == CROSS) ? NOUGHT : CROSS
-        temp_v, temp_locate = lookahead(board, teban, value) 
+#      board.hist.push(i)
+      board.set(i, turn)
+      if !check(board) && (cnt < LIMIT)
+        if board.check_dup(turn)
+#          temp_v = (turn == CROSS) ? MIN_VALUE : MAX_VALUE
+          temp_v = 0
+        else
+          teban = (turn == CROSS) ? NOUGHT : CROSS
+          temp_v, temp_locate = lookahead(board, teban, cnt + 1, value) 
+        end
       else
         temp_v = evaluation(board)
       end
-#binding.pry
-      board[i] = nil
+#binding.pry if cnt == 0
+      board.unset(turn)
+#      board.hist.pop
       if (temp_v >= value && turn == CROSS) 
         value = temp_v 
         locate = i
-        break if threshold < temp_v
+        break if (threshold < temp_v)
       elsif (temp_v <= value && turn == NOUGHT)
         value = temp_v 
         locate = i
-        break if threshold > temp_v
+        break if (threshold > temp_v)
       end
-
     }
-#p "cross:cnt="+cnt.to_s+":value="+value.to_s+":locate="+locate.to_s
     return value, locate
   end
 
 end
-

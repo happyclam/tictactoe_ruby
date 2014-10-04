@@ -39,8 +39,14 @@ end
 while !@game_end
   print "数字を入力後Enterキーを押してください："
   input = gets
-  g.board[input.to_i - 1] = @human.sengo
+  g.board.set(input.to_i - 1, @human.sengo); g.board.set_dup(@human.sengo)
   g.board.display
+
+  # print "数字を入力後Enterキーを押してください："
+  # input = gets
+  # g.board.set(input.to_i - 1, @CPU.sengo); g.board.set_dup(@CPU.sengo)
+  # g.board.display
+
   unless g.command(@CPU)
     print "pass!\n"
     @game_end = true unless g.board.droppable
