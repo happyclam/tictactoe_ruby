@@ -23,7 +23,7 @@ describe Game do
         @player.sengo = (@game.board[n] == CROSS) ? NOUGHT : CROSS
         @threshold = (@player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
         temp_v, locate = @player.lookahead(@game.board, NOUGHT, @threshold)
-        temp_v.should == 0
+        expect(temp_v).to eq(0)
       end
     end
   end
@@ -38,8 +38,8 @@ describe Game do
         @player.sengo = (@game.board[n] == CROSS) ? NOUGHT : CROSS
         @threshold = (@player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
         temp_v, locate = @player.lookahead(@game.board, CROSS, @threshold)
-        temp_v.should == 0 if [0, 2, 6, 8].index(n)
-        temp_v.should == 9 if [1, 3, 5, 7].index(n)
+        expect(temp_v).to eq(0) if [0, 2, 6, 8].index(n)
+        expect(temp_v).to eq(9) if [1, 3, 5, 7].index(n)
       end
     end
   end
@@ -55,14 +55,14 @@ describe Game do
         @player.sengo = (@game.board[n] == CROSS) ? NOUGHT : CROSS
         @threshold = (@player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
         temp_v, locate = @player.lookahead(@game.board, NOUGHT, @threshold)
-        temp_v.should == 0 if [1].index(n)
-        temp_v.should == 9 if [0, 2, 3, 4, 5, 6, 7].index(n)
+        expect(temp_v).to eq(0) if [1].index(n)
+        expect(temp_v).to eq(9) if [0, 2, 3, 4, 5, 6, 7].index(n)
       end
     end
   end
 
   describe "初手4、2手目2角、以後読み切り" do
-    it "9,0,9,9,9,9,9" do
+    it "0,0,0,0,0,0,0" do
       @game.board.each_with_index do |b, n|
         @game.board.init
         @game.board[4] = CROSS
@@ -72,7 +72,7 @@ describe Game do
         @player.sengo = (@game.board[n] == CROSS) ? NOUGHT : CROSS
         @threshold = (@player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
         temp_v, locate = @player.lookahead(@game.board, NOUGHT, @threshold)
-        temp_v.should == 0
+        expect(temp_v).to eq(0)
       end
     end
   end
@@ -91,13 +91,13 @@ describe Game do
         @player.sengo = (@game.board[n] == CROSS) ? NOUGHT : CROSS
         @threshold = (@player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
         temp_v, locate = @player.lookahead(@game.board, CROSS, @threshold)
-        temp_v.should == 0 if [6].index(n)
-        temp_v.should == 9 if [0, 5, 8].index(n)
+        expect(temp_v).to eq(0) if [6].index(n)
+        expect(temp_v).to eq(9) if [0, 5, 8].index(n)
       end
     end
   end
 
-  describe "初手から5,6,4、以後読み切り" do
+  describe "初手から5,6,4、リーチを防ぐかどうか" do
     it "9,9,9,0,9,9" do
       @game.board.each_with_index do |b, n|
         @game.board.init
@@ -109,13 +109,13 @@ describe Game do
         @player.sengo = (@game.board[n] == CROSS) ? NOUGHT : CROSS
         @threshold = (@player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
         temp_v, locate = @player.lookahead(@game.board, CROSS, @threshold)
-        temp_v.should == 0 if [3].index(n)
-        temp_v.should == 9 if [0, 1, 2, 7, 8].index(n)
+        expect(temp_v).to eq(0) if [3].index(n)
+        expect(temp_v).to eq(9) if [0, 1, 2, 7, 8].index(n)
       end
     end
   end
 
-  describe "初手から5,6,4,8、すでに揃っているケース" do
+  describe "初手から5,6,4,8、リーチを防がなかったケース" do
     it "-9,-9,-9,0,9" do
       @game.board.each_with_index do |b, n|
         @game.board.init
@@ -128,15 +128,15 @@ describe Game do
         @player.sengo = (@game.board[n] == CROSS) ? NOUGHT : CROSS
         @threshold = (@player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
         temp_v, locate = @player.lookahead(@game.board, NOUGHT, @threshold)
-        temp_v.should == 0 if [3].index(n)
-        temp_v.should == -9 if [0, 1, 2].index(n)
-        temp_v.should == 9 if [8].index(n)
+        expect(temp_v).to eq(0) if [3].index(n)
+        expect(temp_v).to eq(-9) if [0, 1, 2].index(n)
+        expect(temp_v).to eq(9) if [8].index(n)
       end
     end
   end
 
-  describe "初手から5,6,4,8、リーチを防がなかったケース" do
-    it "-9,-9,-9,0,9" do
+  describe "初手から5,6,4,8、リーチを防いだケース" do
+    it "0,-9,-9,-9,-9" do
       @game.board.each_with_index do |b, n|
         @game.board.init
         @game.board[5] = CROSS
@@ -148,8 +148,8 @@ describe Game do
         @player.sengo = (@game.board[n] == CROSS) ? NOUGHT : CROSS
         @threshold = (@player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
         temp_v, locate = @player.lookahead(@game.board, NOUGHT, @threshold)
-        temp_v.should == 0 if [0].index(n)
-        temp_v.should == -9 if [1, 2, 7, 8].index(n)
+        expect(temp_v).to eq(0) if [0].index(n)
+        expect(temp_v).to eq(-9) if [1, 2, 7, 8].index(n)
       end
     end
   end

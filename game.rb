@@ -25,7 +25,7 @@ class Game
     moves = 0
     board.each_with_index {|b, n|
       @board.init
-      @board[4] = CROSS
+      # @board[4] = CROSS
       # @board[6] = NOUGHT
       # @board[4] = CROSS
       # @board[8] = NOUGHT
@@ -35,12 +35,12 @@ class Game
         moves = @board.select{|b| b != nil }.size + 1
       end
       next if board[n]
-#      @board[n] = CROSS
-      @board[n] = NOUGHT
+      @board[n] = CROSS
+#      @board[n] = NOUGHT
       player.sengo = (@board[n] == CROSS) ? NOUGHT : CROSS
       threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-#      temp_v, locate = player.lookahead(@board, NOUGHT, threshold)
-      temp_v, locate = player.lookahead(@board, CROSS, threshold)
+      temp_v, locate = player.lookahead(@board, NOUGHT, threshold)
+#      temp_v, locate = player.lookahead(@board, CROSS, threshold)
       printf("%d手目: %d 評価値: %d\n", moves, n + 1, temp_v)
     }
   end
