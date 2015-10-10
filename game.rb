@@ -1,5 +1,6 @@
 #-*- coding: utf-8 -*-
-require "pry"
+#require "pry"
+#require "pp"
 
 class Game
   attr_accessor :board
@@ -9,8 +10,15 @@ class Game
   end
 
   def command(player)
-    threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-    temp_v, locate = player.lookahead(@board, player.sengo, threshold)    
+    rest = @board.select{|b| !b}.size
+    if rest > 6
+#p "bfs"
+      locate = player.bfs(@board, player.sengo)
+    else
+#p "dfs"
+      threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
+      temp_v, locate = player.lookahead(@board, player.sengo, threshold)
+    end
     if locate
       @board[locate] = player.sengo
       return true
@@ -50,6 +58,7 @@ end
 class Board < Array
   attr_reader :line
   attr_reader :weight
+  attr_accessor :teban
   def initialize(*args, &block)
     super(*args, &block)
     @line = []
@@ -62,6 +71,7 @@ class Board < Array
     @line << [0, 4, 8]
     @line << [2, 4, 6]
     @weight = [1, 0, 1, 0, 2, 0, 1, 0, 1]
+    @teban = CROSS
   end
 
   def init
@@ -91,7 +101,7 @@ class Board < Array
     print "\n"
     self.each_with_index{|b, i|
       print " |" if (i % 3) == 0
-      print n2c(i) + "|" 
+      print n2c(i) + "|"
       print "\n" if (i % 3) == 2
     }
   end
@@ -115,6 +125,19 @@ class Player
   def initialize(sengo, human)
     @human = human
     @sengo = sengo
+    @duplication = Hash.new
+  end
+
+  def init_dup
+    @duplication.clear
+  end
+
+  def check_dup(board)
+    return @duplication.has_key?(board.hash)
+  end
+
+  def set_dup(board)
+    @duplication[(board).hash] = board
   end
 
   def byweight(board)
@@ -148,8 +171,8 @@ class Player
     board.line.each {|l|
       piece = board[l[0]]
       if (piece && piece == board[l[1]] && piece == board[l[2]])
-        cross_win = true if (piece == CROSS) 
-        nought_win = true if (piece == NOUGHT) 
+        cross_win = true if (piece == CROSS)
+        nought_win = true if (piece == NOUGHT)
       end
     }
     if (cross_win && !nought_win)
@@ -175,18 +198,18 @@ class Player
 #p "cnt="+cnt.to_s+":turn="+((turn == CROSS) ? "X" : "O")+":v="+temp_v.to_s+":i="+i.to_s
       if !check(board)
         teban = (turn == CROSS) ? NOUGHT : CROSS
-        temp_v, temp_locate = lookahead(board, teban, value) 
+        temp_v, temp_locate = lookahead(board, teban, value)
       else
         temp_v = evaluation(board)
       end
 #binding.pry
       board[i] = nil
-      if (temp_v >= value && turn == CROSS) 
-        value = temp_v 
+      if (temp_v >= value && turn == CROSS)
+        value = temp_v
         locate = i
         break if threshold < temp_v
       elsif (temp_v <= value && turn == NOUGHT)
-        value = temp_v 
+        value = temp_v
         locate = i
         break if threshold > temp_v
       end
@@ -196,5 +219,46 @@ class Player
     return value, locate
   end
 
-end
+  def bfs(board, turn)
+    init_dup
+    queue = Array.new
+    choices = Array.new
+    board.teban = turn
+    set_dup(board); queue.push(board)
 
+    necessary = 9 - board.select{|b| !b}.size
+    locate = nil
+    while queue != [] do
+      buf = queue.shift
+      layer = 9 - buf.select{|b| !b}.size
+      next if layer > 3
+      if turn == CROSS
+        value = MIN_VALUE
+      else
+        value = MAX_VALUE
+      end
+      buf.each_with_index {|b, i|
+        next if b
+        temp = buf.clone
+        temp[i] = buf.teban
+        next if check_dup(temp)
+        temp.teban = (buf.teban == CROSS) ? NOUGHT : CROSS
+        if (layer <= 3)
+          temp_v = byweight(temp)
+          if (temp_v >= value && turn == CROSS)
+            value = temp_v
+            choices[layer] = i
+          elsif (temp_v <= value && turn == NOUGHT)
+            value = temp_v
+            choices[layer] = i
+          end
+        end
+        set_dup(temp); queue.push(temp)
+      }
+    end
+#p choices
+#p "necessary="+necessary.to_s
+    return choices[necessary]
+  end
+
+end
