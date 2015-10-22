@@ -1,26 +1,187 @@
 #-*- coding: utf-8 -*-
 #require "pry"
 #require "pp"
+require "pathname"
+
+class Tree
+  @@total = 0
+  @@counter = 0
+  attr_reader :value, :child, :score
+  def initialize(v, pebbles=10, c=[])
+    @value = v
+    @child = c
+    #盤面が指定されている時は、すでに駒が置かれているところは
+    #選べないようにあらかじめ 0 をセットしておく
+    @score = v.clone
+    @score.map!{|v|
+      unless v
+        v = pebbles
+      else
+        v = 0
+      end
+    }
+    @@counter = 0
+    @@total = 0
+  end
+
+  def init
+    @child = []
+  end
+
+  def total
+    return @@total
+  end
+
+  #動作確認用
+  def show
+    p @@total
+    @value.display
+    @@total += 1
+    @child.each{|c|
+      c.show
+    }
+  end
+
+  #動作確認用
+  #一つ目のパラメータで指定された局面データ（親）を探して、その子ノードとしてオブジェクトを追加する
+  def add(target, obj)
+ #   return if @value == target
+    ret = nil
+    @child.each_with_index { |c, i|
+      if c.value == target
+        ret = c.child.push(obj)
+      else
+        ret = c.add(target, obj)
+      end
+      break if ret
+    }
+    return ret
+  end
+  #（その手に対するscore／局面にあるscoreの総数）の確率で手を選択する
+  def apply(v)
+    #初期盤面のときはすぐにreturn
+    return idx(@score) if @value == v
+    ret = nil
+    @child.each { |c|
+      if c.value == v
+        ret = idx(c.score)
+      else
+        ret = c.apply(v)
+      end
+      break if ret
+    }
+    return ret
+  end
+  #指定された局面のノードを返す
+  def search(v)
+    return self if @value == v
+    ret = nil
+    @child.each { |c|
+      if c.value == v
+        ret = c
+      else
+        ret = c.search(v)
+      end
+      break if ret
+    }
+    return ret
+  end
+  #動作確認用
+  def count(v)
+    @child.each { |c|
+      if c.value == v
+        @@counter += 1
+      else
+        @@counter = c.count(v)
+      end
+    }
+    @@counter
+  end
+  #動作確認用
+  def parent(v)
+    ret = nil
+    @child.each { |c|
+#      p "v=" + v.to_s + ":c.value=" + c.value.to_s + ":@value=" + @value.to_s
+      if c.value == v
+        ret = self
+      else
+        ret = c.parent(v)
+      end
+      break if ret
+    }
+    return ret
+  end
+
+  def self.read(path)
+    begin
+      Pathname.new(path).open("rb") do |f|
+        trees = Marshal.load(f)
+      end
+    rescue
+      p $!
+    end
+  end
+
+  def self.save(path, obj)
+    begin
+      Pathname.new(path).open("wb") do |f|
+        Marshal.dump(obj, f)
+      end
+    rescue
+      p $!
+    end
+  end
+
+  private
+  def idx(score)
+    ret = nil
+    index = rand(score.inject{|sum, n| sum + n})
+    start = 0
+    score.each_with_index{|v, i|
+      start += v
+      if start > index
+        ret = i
+        break
+      end
+    }
+    return ret
+  end
+end
 
 class Game
-  attr_accessor :board
+  attr_accessor :board, :history
 
   def initialize
     @board = Board.new([nil, nil, nil, nil, nil, nil, nil, nil, nil])
+    @history = []
   end
 
   def command(player)
-    rest = @board.select{|b| !b}.size
-    if rest > 6
-#p "bfs"
-      locate = player.bfs(@board, player.sengo)
+#    locate = player.trees.apply(@board)
+
+    #人間役は常に機械学習ルーチンじゃない方
+    #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
+    unless player.human 
+      locate = player.trees.apply(@board)
     else
-#p "dfs"
-      threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-      temp_v, locate = player.lookahead(@board, player.sengo, threshold)
+      # #最強DFSと対戦
+      rest = @board.select{|b| !b}.size
+      if rest == 9
+        locate = rand(9)
+      else
+        threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
+        temp_v, locate = player.lookahead(@board, player.sengo, threshold)
+      end
+      #乱数と対戦
+      # locate = rand(9)
+      # while @board[locate] != nil
+      #   locate = rand(9)
+      # end
     end
     if locate
       @board[locate] = player.sengo
+      @board.move = locate
+      @history.push(@board.clone)
       return true
     else
       return false
@@ -28,29 +189,27 @@ class Game
 
   end
 
-  def test(player)
-    first = true
-    moves = 0
-    board.each_with_index {|b, n|
-      @board.init
-      # @board[4] = CROSS
-      # @board[6] = NOUGHT
-      # @board[4] = CROSS
-      # @board[8] = NOUGHT
-      if first
-        @board.display
-        first = false
-        moves = @board.select{|b| b != nil }.size + 1
+  def decision
+    cross_win = false
+    nought_win = false
+    @board.line.each {|l|
+      piece = @board[l[0]]
+      if (piece && piece == @board[l[1]] && piece == @board[l[2]])
+        cross_win = true if (piece == CROSS)
+        nought_win = true if (piece == NOUGHT)
       end
-      next if board[n]
-      @board[n] = CROSS
-#      @board[n] = NOUGHT
-      player.sengo = (@board[n] == CROSS) ? NOUGHT : CROSS
-      threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-      temp_v, locate = player.lookahead(@board, NOUGHT, threshold)
-#      temp_v, locate = player.lookahead(@board, CROSS, threshold)
-      printf("%d手目: %d 評価値: %d\n", moves, n + 1, temp_v)
     }
+    if (cross_win && !nought_win)
+      return CROSS
+    elsif (nought_win && !cross_win)
+      return NOUGHT
+    else
+      if (@board.select{|b| !b}.size == 0)
+        return DRAW
+      else
+        return ONGOING
+      end
+    end
   end
 
 end
@@ -59,6 +218,7 @@ class Board < Array
   attr_reader :line
   attr_reader :weight
   attr_accessor :teban
+  attr_accessor :move
   def initialize(*args, &block)
     super(*args, &block)
     @line = []
@@ -79,10 +239,6 @@ class Board < Array
       self[i] = nil
     }
   end
-
-  # def [](i)
-  #   super(i)
-  # end
 
   def droppable
     return false if (self.select{|b| !b}.size == 0)
@@ -120,12 +276,51 @@ class Board < Array
 end
 
 class Player
-  attr_accessor :sengo, :human
+  attr_accessor :sengo, :human, :trees
 
   def initialize(sengo, human)
     @human = human
     @sengo = sengo
     @duplication = Hash.new
+    @trees = nil
+  end
+
+  def prepare
+    if File.exist?("./trees.dump")
+      @trees = Tree::read("./trees.dump")
+    else
+      board = Board.new([nil, nil, nil, nil, nil, nil, nil, nil, nil])
+      @trees = Tree.new(board, 10)
+      @trees.init
+      bfs(board)
+    end
+  end
+
+  def learning(result, history)
+    case result
+    when CROSS
+      inc = (@sengo == CROSS) ? 3 : 0
+    when DRAW
+      inc = 1
+    when NOUGHT
+      inc = (@sengo == NOUGHT) ? 3 : 0
+    end
+
+    board = history.pop
+    buf = @trees.search(board)
+    pre_index = board.move
+    #最後の手を取得してすぐにpopして一つ前の局面のscoreを更新する
+    while board
+      board = history.pop
+      buf = @trees.search(board)
+      if buf
+#        buf.value.display
+        buf.score[pre_index] += inc if (@sengo == buf.value.teban) && (buf.score[pre_index] > 0)
+        pre_index = board.move
+      end
+    end
+    Tree::save("./trees.dump", @trees)
+
   end
 
   def init_dup
@@ -202,7 +397,6 @@ class Player
       else
         temp_v = evaluation(board)
       end
-#binding.pry
       board[i] = nil
       if (temp_v >= value && turn == CROSS)
         value = temp_v
@@ -219,46 +413,44 @@ class Player
     return value, locate
   end
 
-  def bfs(board, turn)
+  def bfs(board)
     init_dup
     queue = Array.new
-    choices = Array.new
-    board.teban = turn
+
+    seq = 0
+#    pre = 0
+    board.teban = CROSS
     set_dup(board); queue.push(board)
 
-    necessary = 9 - board.select{|b| !b}.size
     locate = nil
+
+    n_cross = 0
+    n_nought = 0
+    n_draw = 0
     while queue != [] do
       buf = queue.shift
       layer = 9 - buf.select{|b| !b}.size
-      next if layer > 3
-      if turn == CROSS
-        value = MIN_VALUE
-      else
-        value = MAX_VALUE
-      end
+#p "layer=" + layer.to_s + ":seq=" + seq.to_s
       buf.each_with_index {|b, i|
         next if b
         temp = buf.clone
         temp[i] = buf.teban
+        #重複データを削除しているので、Treeデータ生成時のmoveは意味がない
+        temp.move = nil
         next if check_dup(temp)
-        temp.teban = (buf.teban == CROSS) ? NOUGHT : CROSS
-        if (layer <= 3)
-          temp_v = byweight(temp)
-          if (temp_v >= value && turn == CROSS)
-            value = temp_v
-            choices[layer] = i
-          elsif (temp_v <= value && turn == NOUGHT)
-            value = temp_v
-            choices[layer] = i
-          end
+        seq += 1
+        case layer
+        when 0
+          @trees.child.push(Tree.new(temp, 10))
+        else
+          @trees.add(buf, Tree.new(temp, 10))
         end
+
+        temp.teban = (buf.teban == CROSS) ? NOUGHT : CROSS
         set_dup(temp); queue.push(temp)
       }
     end
-#p choices
-#p "necessary="+necessary.to_s
-    return choices[necessary]
+    return seq
   end
 
 end
