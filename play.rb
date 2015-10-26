@@ -41,17 +41,18 @@ while !@game_end
   input = gets
   g.board[input.to_i - 1] = @human.sengo
   g.board.display
-  unless g.command(@CPU)
-    print "pass!\n"
-    @game_end = true unless g.board.droppable
-  else
-    unless g.board.droppable
+  ret = g.decision
+  if ret == ONGOING
+    g.command(@CPU)
+    ret = g.decision
+    if ret != ONGOING
       g.board.display
       break
     end
+  else
+    @game_end = true
   end
   g.board.display
 end
 #-------------------------------------------------------
 print "Game End!\n"
-

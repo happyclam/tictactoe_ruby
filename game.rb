@@ -28,29 +28,27 @@ class Game
 
   end
 
-  def test(player)
-    first = true
-    moves = 0
-    board.each_with_index {|b, n|
-      @board.init
-      # @board[4] = CROSS
-      # @board[6] = NOUGHT
-      # @board[4] = CROSS
-      # @board[8] = NOUGHT
-      if first
-        @board.display
-        first = false
-        moves = @board.select{|b| b != nil }.size + 1
+  def decision
+    cross_win = false
+    nought_win = false
+    @board.line.each {|l|
+      piece = @board[l[0]]
+      if (piece && piece == @board[l[1]] && piece == @board[l[2]])
+        cross_win = true if (piece == CROSS)
+        nought_win = true if (piece == NOUGHT)
       end
-      next if board[n]
-      @board[n] = CROSS
-#      @board[n] = NOUGHT
-      player.sengo = (@board[n] == CROSS) ? NOUGHT : CROSS
-      threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-      temp_v, locate = player.lookahead(@board, NOUGHT, threshold)
-#      temp_v, locate = player.lookahead(@board, CROSS, threshold)
-      printf("%d手目: %d 評価値: %d\n", moves, n + 1, temp_v)
     }
+    if (cross_win && !nought_win)
+      return CROSS
+    elsif (nought_win && !cross_win)
+      return NOUGHT
+    else
+      if (@board.select{|b| !b}.size == 0)
+        return DRAW
+      else
+        return ONGOING
+      end
+    end
   end
 
 end
@@ -256,6 +254,7 @@ class Player
         set_dup(temp); queue.push(temp)
       }
     end
+
 #p choices
 #p "necessary="+necessary.to_s
     return choices[necessary]
