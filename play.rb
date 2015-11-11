@@ -22,6 +22,7 @@ end
 
 g = Game.new
 g.board.display
+g.history.push(g.board.clone)
 if @gote_player.human
   g.command(@sente_player)
   g.board.display
