@@ -7,7 +7,7 @@ class Tree
   @@total = 0
   @@counter = 0
   attr_reader :value, :child, :score
-  def initialize(v, pebbles=10, c=[])
+  def initialize(v, pebbles=PEBBLES, c=[])
     @value = v
     @child = c
     #盤面が指定されている時は、すでに駒が置かれているところは
@@ -17,7 +17,7 @@ class Tree
       unless v
         v = pebbles
       else
-        v = 0
+        v = nil
       end
     }
     @@counter = 0
@@ -135,9 +135,10 @@ class Tree
   private
   def idx(score)
     ret = nil
-    index = rand(score.inject{|sum, n| sum + n})
+    index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum})    
     start = 0
     score.each_with_index{|v, i|
+      next unless v
       start += v
       if start > index
         ret = i
@@ -157,27 +158,27 @@ class Game
   end
 
   def command(player)
-#    locate = player.trees.apply(@board)
+    locate = player.trees.apply(@board)
 
-    #人間役は常に機械学習ルーチンじゃない方
-    #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
-    unless player.human 
-      locate = player.trees.apply(@board)
-    else
-      # #最強DFSと対戦
-      rest = @board.select{|b| !b}.size
-      if rest == 9
-        locate = rand(9)
-      else
-        threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-        temp_v, locate = player.lookahead(@board, player.sengo, threshold)
-      end
-      #乱数と対戦
-      # locate = rand(9)
-      # while @board[locate] != nil
-      #   locate = rand(9)
-      # end
-    end
+    # #人間役は常に機械学習ルーチンじゃない方
+    # #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
+    # unless player.human 
+    #   locate = player.trees.apply(@board)
+    # else
+    #   #最強DFSと対戦
+    #   rest = @board.select{|b| !b}.size
+    #   if rest == 9
+    #     locate = rand(9)
+    #   else
+    #     threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
+    #     temp_v, locate = player.lookahead(@board, player.sengo, threshold)
+    #   end
+    #   #乱数と対戦
+    #   # locate = rand(9)
+    #   # while @board[locate] != nil
+    #   #   locate = rand(9)
+    #   # end
+    # end
     if locate
       @board[locate] = player.sengo
       @board.move = locate
@@ -290,7 +291,7 @@ class Player
       @trees = Tree::read("./trees.dump")
     else
       board = Board.new([nil, nil, nil, nil, nil, nil, nil, nil, nil])
-      @trees = Tree.new(board, 10)
+      @trees = Tree.new(board, PEBBLES)
       @trees.init
       bfs(board)
     end
@@ -299,11 +300,11 @@ class Player
   def learning(result, history)
     case result
     when CROSS
-      inc = (@sengo == CROSS) ? 3 : 0
+      inc = (@sengo == CROSS) ? 3 : -1
     when DRAW
       inc = 1
     when NOUGHT
-      inc = (@sengo == NOUGHT) ? 3 : 0
+      inc = (@sengo == NOUGHT) ? 3 : -1
     end
 
     board = history.pop
@@ -314,8 +315,13 @@ class Player
       board = history.pop
       buf = @trees.search(board)
       if buf
-#        buf.value.display
-        buf.score[pre_index] += inc if (@sengo == buf.value.teban) && (buf.score[pre_index] > 0)
+        buf.score[pre_index] += inc if (@sengo == buf.value.teban)
+        #石が０個になっていたら置ける箇所全てに追加
+        if buf.score[pre_index] <= 0
+          buf.score.map!{|v|
+            v += PEBBLES if v
+          }
+        end
         pre_index = board.move
       end
     end
@@ -441,9 +447,9 @@ class Player
         seq += 1
         case layer
         when 0
-          @trees.child.push(Tree.new(temp, 10))
+          @trees.child.push(Tree.new(temp, PEBBLES))
         else
-          @trees.add(buf, Tree.new(temp, 10))
+          @trees.add(buf, Tree.new(temp, PEBBLES))
         end
 
         temp.teban = (buf.teban == CROSS) ? NOUGHT : CROSS

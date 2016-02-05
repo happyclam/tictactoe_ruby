@@ -2,12 +2,16 @@
 
 DIR=$(cd $(dirname $0); pwd)
 echo $DIR
-for ((i=1;i<=1000;i++))
+for ((j=0;j<=99;j++))
 do
-    echo "Serial ${i}"  >> autolearn1.txt
-    ruby $DIR/learning.rb >> autolearn1.txt
-#    echo "Serial ${i}"
-#    ruby $DIR/learning.rb
+    for ((i=1;i<=1000;i++))
+    do
+        s=`expr $j \* 100`
+        s=`expr $s + $i`
+        t=$(printf "%03d" $j)
+        echo "Serial ${s}"  >> autolearn${t}.txt
+        ruby $DIR/learning.rb >> autolearn${t}.txt
+    done
 done
  
 exit 0
