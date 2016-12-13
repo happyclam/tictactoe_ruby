@@ -135,7 +135,7 @@ class Tree
   private
   def idx(score)
     ret = nil
-    index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum})    
+    index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum})
     start = 0
     score.each_with_index{|v, i|
       next unless v
@@ -162,7 +162,7 @@ class Game
 
     # #人間役は常に機械学習ルーチンじゃない方
     # #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
-    # unless player.human 
+    # unless player.human
     #   locate = player.trees.apply(@board)
     # else
     #   #最強DFSと対戦
@@ -216,22 +216,21 @@ class Game
 end
 
 class Board < Array
-  attr_reader :line
-  attr_reader :weight
+  @@line = [
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    [0, 4, 8],
+    [2, 4, 6]
+  ]
+  @@weight = [1, 0, 1, 0, 2, 0, 1, 0, 1]
   attr_accessor :teban
   attr_accessor :move
   def initialize(*args, &block)
     super(*args, &block)
-    @line = []
-    @line << [0, 1, 2]
-    @line << [3, 4, 5]
-    @line << [6, 7, 8]
-    @line << [0, 3, 6]
-    @line << [1, 4, 7]
-    @line << [2, 5, 8]
-    @line << [0, 4, 8]
-    @line << [2, 4, 6]
-    @weight = [1, 0, 1, 0, 2, 0, 1, 0, 1]
     @teban = CROSS
   end
 
@@ -241,9 +240,17 @@ class Board < Array
     }
   end
 
+  def self.weight
+    @@weight
+  end
+
+  def line
+    @@line
+  end
+
   def droppable
     return false if (self.select{|b| !b}.size == 0)
-    self.line.each {|l|
+    @@line.each {|l|
       piece = self[l[0]]
       if (piece && piece == self[l[1]] && piece == self[l[2]])
         return false
@@ -334,11 +341,13 @@ class Player
   end
 
   def check_dup(board)
-    return @duplication.has_key?(board.hash)
+    seed = board.to_s
+    return @duplication.has_key?(seed)
   end
 
   def set_dup(board)
-    @duplication[(board).hash] = board
+    seed = board.to_s
+    @duplication[seed] = board
   end
 
   def byweight(board)
@@ -346,9 +355,9 @@ class Player
     nought = 0
     board.each_with_index {|p, i|
       if p == CROSS
-        cross += board.weight[i]
+        cross += Board.weight[i]
       elsif p == NOUGHT
-        nought += board.weight[i]
+        nought += Board.weight[i]
       end
     }
     return (cross - nought)
