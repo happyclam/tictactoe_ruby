@@ -26,10 +26,12 @@ end
 
 g = Game.new
 g.board.display
+g.dynatree(@CPU)
 g.history.push(g.board.clone)
 
 if @gote_player.human
 p "3"
+  g.board.teban = NOUGHT
   g.command(@sente_player)
   g.board.display
 end
@@ -39,7 +41,23 @@ while !@game_end
 #  print "数字を入力後Enterキーを押してください："
 #  input = gets
 #  g.board[input.to_i - 1] = @human.sengo; g.board.move = (input.to_i - 1)
-  g.command(@human)
+###  g.command(@human)
+  # #最強DFSと対戦
+  # rest = g.board.select{|b| !b}.size
+  # if rest == 9
+  #   locate = rand(9)
+  # else
+  #   threshold = (@human.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
+  #   temp_v, locate = @human.lookahead(g.board, @human.sengo, threshold)
+  # end
+  #乱数と対戦
+  locate = rand(9)
+  while g.board[locate] != nil
+    locate = rand(9)
+  end
+  g.board[locate] = @human.sengo; g.board.teban = @CPU.sengo; g.board.move = locate
+  g.dynatree(@CPU)
+  g.history.push(g.board.clone)
   g.board.display
   ret = g.decision
   if ret == ONGOING

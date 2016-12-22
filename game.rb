@@ -1,11 +1,13 @@
 #-*- coding: utf-8 -*-
 #require "pry"
-#require "pp"
+require "pp"
 require "pathname"
 
 class Tree
   @@total = 0
+  @@pebbles = 0
   @@counter = 0
+
   attr_reader :value, :child, :score
   def initialize(v, pebbles=PEBBLES, c=[])
     @value = v
@@ -86,7 +88,26 @@ class Tree
     }
     return ret
   end
-  #動作確認用
+  #リーチ状態の局面を探してscoreを集計する
+  def statistics_prevent
+    @child.each { |c|
+      locate = nil
+      ret, locate = reach(c.value)
+      if ret == CROSS || ret == NOUGHT
+        # c.value.display()
+        # p c.value.teban
+        # p c.score
+        @@total = @@total + c.score.inject(0){|sum, n| (n) ? sum + n : sum}
+        # @@total = @@total + c.score.inject(0){|sum, n| (n) ? sum + n : sum} / c.score.compact.length
+        @@pebbles = @@pebbles + c.score[locate]
+        # @@counter += 1
+      else
+        @@total, @@pebbles = c.statistics_prevent
+      end
+    }
+    return @@total, @@pebbles
+  end
+  #全検索して指定局面の数を返す
   def count(v)
     @child.each { |c|
       if c.value == v
@@ -135,7 +156,7 @@ class Tree
   private
   def idx(score)
     ret = nil
-    index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum})
+    index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum} * 10) / 10.0
     start = 0
     score.each_with_index{|v, i|
       next unless v
@@ -147,6 +168,56 @@ class Tree
     }
     return ret
   end
+  #リーチ局面の判定（リーチかどうかを知りたいだけなので、ゲーム終了していてもONGOINGを返している）
+  def reach(board)
+    cross_reach = false
+    nought_reach = false
+    locate = nil
+    board.line.each {|l|
+      piece = board[l[0]]
+      if (piece && piece == board[l[1]] && piece == board[l[2]])
+        cross_reach = false
+        nought_reach = false
+        locate = nil
+        break
+      else
+        case board.teban
+        when NOUGHT
+          if (board[l[0]] == CROSS && board[l[1]] == CROSS && board[l[2]] == nil)
+            cross_reach = true
+            locate = l[2]
+          elsif (board[l[0]] == nil && board[l[1]] == CROSS && board[l[2]] == CROSS)
+            cross_reach = true
+            locate = l[0]
+          elsif (board[l[0]] == CROSS && board[l[1]] == nil && board[l[2]] == CROSS)
+            cross_reach = true
+            locate = l[1]
+          end
+        when CROSS
+          if (board[l[0]] == NOUGHT && board[l[1]] == NOUGHT && board[l[2]] == nil)
+            nought_reach = true
+            locate = l[2]
+          elsif (board[l[0]] == nil && board[l[1]] == NOUGHT && board[l[2]] == NOUGHT)
+            nought_reach = true
+            locate = l[0]
+          elsif (board[l[0]] == NOUGHT && board[l[1]] == nil && board[l[2]] == NOUGHT)
+            nought_reach = true
+            locate = l[1]
+          end
+        else
+          p "error ======================"
+        end
+      end
+    }
+    if cross_reach
+      return CROSS, locate
+    elsif nought_reach
+      return NOUGHT, locate
+    else
+      return ONGOING, locate
+    end
+  end
+
 end
 
 class Game
@@ -157,31 +228,35 @@ class Game
     @history = []
   end
 
+  def dynatree(player)
+    parent = player.trees.search(@board)
+    if parent.child == []
+      layer = 9 - @board.select{|b| !b}.size
+      @board.each_with_index {|b, i|
+        next if b
+        temp = @board.clone
+        temp[i] = @board.teban
+        temp.move = nil
+        temp.teban = (@board.teban == CROSS) ? NOUGHT : CROSS
+        next if player.check_dup(temp)
+        case layer
+        when 0
+          player.trees.child.push(Tree.new(temp, PEBBLES))
+        else
+          player.trees.add(@board, Tree.new(temp, PEBBLES))
+        end
+        player.set_dup(temp)
+      }
+    end
+  end
+
   def command(player)
     locate = player.trees.apply(@board)
-
-    # #人間役は常に機械学習ルーチンじゃない方
-    # #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
-    # unless player.human
-    #   locate = player.trees.apply(@board)
-    # else
-    #   #最強DFSと対戦
-    #   rest = @board.select{|b| !b}.size
-    #   if rest == 9
-    #     locate = rand(9)
-    #   else
-    #     threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-    #     temp_v, locate = player.lookahead(@board, player.sengo, threshold)
-    #   end
-    #   #乱数と対戦
-    #   # locate = rand(9)
-    #   # while @board[locate] != nil
-    #   #   locate = rand(9)
-    #   # end
-    # end
     if locate
       @board[locate] = player.sengo
+      @board.teban = (player.sengo == CROSS) ? NOUGHT : CROSS
       @board.move = locate
+      dynatree(player)
       @history.push(@board.clone)
       return true
     else
@@ -227,17 +302,13 @@ class Board < Array
     [2, 4, 6]
   ]
   @@weight = [1, 0, 1, 0, 2, 0, 1, 0, 1]
+  # attr_reader :line
+  # attr_reader :weight
   attr_accessor :teban
   attr_accessor :move
   def initialize(*args, &block)
     super(*args, &block)
     @teban = CROSS
-  end
-
-  def init
-    self.each_with_index {|n, i|
-      self[i] = nil
-    }
   end
 
   def self.weight
@@ -246,6 +317,12 @@ class Board < Array
 
   def line
     @@line
+  end
+
+  def init
+    self.each_with_index {|n, i|
+      self[i] = nil
+    }
   end
 
   def droppable
@@ -293,6 +370,10 @@ class Player
     @trees = nil
   end
 
+  def hashcount
+    @duplication.length
+  end
+
   def prepare
     if File.exist?("./trees.dump")
       @trees = Tree::read("./trees.dump")
@@ -300,39 +381,66 @@ class Player
       board = Board.new([nil, nil, nil, nil, nil, nil, nil, nil, nil])
       @trees = Tree.new(board, PEBBLES)
       @trees.init
-      bfs(board)
+    end
+    if File.exist?("./duplication.dump")
+      begin
+        Pathname.new("./duplication.dump").open("rb") do |f|
+          @duplication = Marshal.load(f)
+        end
+      rescue
+        p $!
+        exit
+      end
+    else
+      @duplication = Hash.new
     end
   end
 
   def learning(result, history)
-    case result
-    when CROSS
-      inc = (@sengo == CROSS) ? 3 : -1
-    when DRAW
-      inc = 1
-    when NOUGHT
-      inc = (@sengo == NOUGHT) ? 3 : -1
-    end
-
     board = history.pop
     buf = @trees.search(board)
     pre_index = board.move
     #最後の手を取得してすぐにpopして一つ前の局面のscoreを更新する
+    base = history.size.to_f
     while board
+#      dose = history.size / base
+#      dose = 0.029 * 1.882 ** history.size
+#      dose = 0.188 * 1.588 ** history.size
+      dose = (history.size <= 0) ? 0.1 : ((1.0 / base) + Math.log(history.size, base))
+      case result
+      when CROSS
+        inc = (@sengo == CROSS) ? (3.0 * dose) : (-1.0 * dose)
+      when DRAW
+        inc = 1.0
+      when NOUGHT
+        inc = (@sengo == NOUGHT) ? (3.0 * dose) : (-1.0 * dose)
+      end
       board = history.pop
       buf = @trees.search(board)
       if buf
         buf.score[pre_index] += inc if (@sengo == buf.value.teban)
-        #石が０個になっていたら置ける箇所全てに追加
-        if buf.score[pre_index] <= 0
+        #石が０個になっていたら置ける箇所全てに追加（小数に対応するために0.1に変更）
+        if buf.score[pre_index] <= 0.1
+          positive = buf.score.min_by{|v| v.to_i}
+          positive = positive ? (positive.abs + PEBBLES) : PEBBLES
           buf.score.map!{|v|
-            v += PEBBLES if v
+            v += positive if v
           }
         end
         pre_index = board.move
+      else
+        p "=== Not Found ========================="
       end
     end
     Tree::save("./trees.dump", @trees)
+    @duplication = @duplication.invert.invert.dup
+    begin
+      Pathname.new("./duplication.dump").open("wb") do |f|
+        Marshal.dump(@duplication, f)
+      end
+    rescue
+      p $!
+    end
 
   end
 

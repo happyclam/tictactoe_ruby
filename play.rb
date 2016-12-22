@@ -22,8 +22,10 @@ end
 
 g = Game.new
 g.board.display
+g.dynatree(@CPU)
 g.history.push(g.board.clone)
 if @gote_player.human
+  g.board.teban = NOUGHT
   g.command(@sente_player)
   g.board.display
 end
@@ -32,7 +34,8 @@ end
 while !@game_end
   print "数字を入力後Enterキーを押してください："
   input = gets
-  g.board[input.to_i - 1] = @human.sengo; g.board.move = (input.to_i - 1)
+  g.board[input.to_i - 1] = @human.sengo; g.board.teban = @CPU.sengo; g.board.move = (input.to_i - 1)
+  g.dynatree(@CPU)
   g.history.push(g.board.clone)
   g.board.display
   ret = g.decision
@@ -69,5 +72,3 @@ when NOUGHT
 end
 
 @CPU.learning(ret, g.history)
-
-
