@@ -45,10 +45,10 @@ class Tree
   #動作確認用
   #一つ目のパラメータで指定された局面データ（親）を探して、その子ノードとしてオブジェクトを追加する
   def add(target, obj)
- #   return if @value == target
+    # p "Tree.add"
     ret = nil
     @child.each_with_index { |c, i|
-      if c.value == target
+      if overlapped(target, c.value)
         ret = c.child.push(obj)
       else
         ret = c.add(target, obj)
@@ -58,13 +58,17 @@ class Tree
     return ret
   end
   #（その手に対するscore／局面にあるscoreの総数）の確率で手を選択する
+  # 指し手の数値を返す
   def apply(v)
+    # p "Tree.apply"
     #初期盤面のときはすぐにreturn
     return idx(@score) if @value == v
     ret = nil
-    @child.each { |c|
-      if c.value == v
+    @child.each {|c|
+      converted = overlapped(v, c.value)
+      if converted
         ret = idx(c.score)
+        ret = c.value.rotate_sym[converted][ret]
       else
         ret = c.apply(v)
       end
@@ -74,17 +78,20 @@ class Tree
   end
   #指定された局面のノードを返す
   def search(v)
-    return self if @value == v
+    # p "Tree.search"
+    converted = 0
+    return self, converted if @value == v
     ret = nil
     @child.each { |c|
-      if c.value == v
+      converted = overlapped(v, c.value)
+      if converted
         ret = c
       else
-        ret = c.search(v)
+        ret, converted = c.search(v)
       end
       break if ret
     }
-    return ret
+    return ret, converted
   end
   #動作確認用
   def count(v)
@@ -101,7 +108,6 @@ class Tree
   def parent(v)
     ret = nil
     @child.each { |c|
-#      p "v=" + v.to_s + ":c.value=" + c.value.to_s + ":@value=" + @value.to_s
       if c.value == v
         ret = self
       else
@@ -133,9 +139,20 @@ class Tree
   end
 
   private
+  def overlapped(src, dest)
+    temp = dest.clone
+    temp.rotate_sym.each_with_index{|v, i|
+      buf = Array.new(temp.length, nil)
+      dest.each_with_index{|value, l|
+        buf[v[l]] = value
+      }
+      return i if buf == src
+    }
+    return nil
+  end
   def idx(score)
     ret = nil
-    index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum})
+    index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum} * 10) / 10.0
     start = 0
     score.each_with_index{|v, i|
       next unless v
@@ -158,27 +175,27 @@ class Game
   end
 
   def command(player)
-    locate = player.trees.apply(@board)
+    # locate = player.trees.apply(@board)
 
-    # #人間役は常に機械学習ルーチンじゃない方
-    # #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
-    # unless player.human
-    #   locate = player.trees.apply(@board)
-    # else
-    #   #最強DFSと対戦
-    #   rest = @board.select{|b| !b}.size
-    #   if rest == 9
-    #     locate = rand(9)
-    #   else
-    #     threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-    #     temp_v, locate = player.lookahead(@board, player.sengo, threshold)
-    #   end
-    #   #乱数と対戦
-    #   # locate = rand(9)
-    #   # while @board[locate] != nil
-    #   #   locate = rand(9)
-    #   # end
-    # end
+    #人間役は常に機械学習ルーチンじゃない方
+    #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
+    unless player.human
+      locate = player.trees.apply(@board)
+    else
+      #最強DFSと対戦
+      rest = @board.select{|b| !b}.size
+      if rest == 9
+        locate = rand(9)
+      else
+        threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
+        temp_v, locate = player.lookahead(@board, player.sengo, threshold)
+      end
+      #乱数と対戦
+      # locate = rand(9)
+      # while @board[locate] != nil
+      #   locate = rand(9)
+      # end
+    end
     if locate
       @board[locate] = player.sengo
       @board.move = locate
@@ -216,6 +233,17 @@ class Game
 end
 
 class Board < Array
+  @@restore_table = [0, 3, 2, 1, 4, 5, 6, 7]
+  @@rotate_sym = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8],
+    [2, 5, 8, 1, 4, 7, 0, 3, 6],
+    [8, 7, 6, 5, 4, 3, 2, 1, 0],
+    [6, 3, 0, 7, 4, 1, 8, 5, 2],
+    [2, 1, 0, 5, 4, 3, 8, 7, 6],
+    [6, 7, 8, 3, 4, 5, 0, 1, 2],
+    [0, 3, 6, 1, 4, 7, 2, 5, 8],
+    [8, 5, 2, 7, 4, 1, 6, 3, 0]
+  ]
   @@line = [
     [0, 1, 2],
     [3, 4, 5],
@@ -242,6 +270,14 @@ class Board < Array
 
   def self.weight
     @@weight
+  end
+
+  def self.restore_table
+    @@restore_table
+  end
+  
+  def rotate_sym
+    @@rotate_sym
   end
 
   def line
@@ -305,28 +341,39 @@ class Player
   end
 
   def learning(result, history)
-    case result
-    when CROSS
-      inc = (@sengo == CROSS) ? 3 : -1
-    when DRAW
-      inc = 1
-    when NOUGHT
-      inc = (@sengo == NOUGHT) ? 3 : -1
-    end
-
+    # p "Player.learning"
     board = history.pop
-    buf = @trees.search(board)
+    buf, converted = @trees.search(board)
     pre_index = board.move
     #最後の手を取得してすぐにpopして一つ前の局面のscoreを更新する
+    base = history.size.to_f
     while board
+      dose = history.size / base
+#      dose = 0.029 * 1.882 ** history.size
+#      dose = 0.188 * 1.588 ** history.size
+#      dose = (history.size <= 0) ? 0.1 : ((1.0 / base) + Math.log(history.size, base))
+      case result
+      when CROSS
+        inc = (@sengo == CROSS) ? (3.0 * dose) : (-1.0 * dose)
+      when DRAW
+        inc = 1.0
+      when NOUGHT
+        inc = (@sengo == NOUGHT) ? (3.0 * dose) : (-1.0 * dose)
+      end
       board = history.pop
-      buf = @trees.search(board)
+      # buf = @trees.search(board)
+      buf, converted = @trees.search(board)
+      restore_index = Board.restore_table[converted]
       if buf
-        buf.score[pre_index] += inc if (@sengo == buf.value.teban)
-        #石が０個になっていたら置ける箇所全てに追加
-        if buf.score[pre_index] <= 0
+        # buf.score[pre_index] += inc if (@sengo == buf.value.teban)
+        buf.score[buf.value.rotate_sym[restore_index][pre_index]] += inc if (@sengo == buf.value.teban)
+        #石が０個になっていたら置ける箇所全てに追加（小数に対応するために0.1に変更）
+        # if buf.score[pre_index] <= 0.1
+        if buf.score[buf.value.rotate_sym[restore_index][pre_index]] <= 0.1
+          positive = buf.score.min_by{|v| v.to_i}
+          positive = positive ? (positive.abs + PEBBLES) : PEBBLES
           buf.score.map!{|v|
-            v += PEBBLES if v
+            v += positive if v
           }
         end
         pre_index = board.move
@@ -341,6 +388,16 @@ class Player
   end
 
   def check_dup(board)
+    temp = board.clone
+    temp.rotate_sym.each{|v|
+      buf = Array.new(temp.length, nil)
+      temp.each_with_index{|value, i|
+        buf[v[i]] = value
+      }
+      seed = buf.to_s
+      return true if @duplication.has_key?(seed)
+    }
+    return true if check(temp)
     seed = board.to_s
     return @duplication.has_key?(seed)
   end
@@ -404,8 +461,6 @@ class Player
     board.each_with_index {|b, i|
       next if b
       board[i] = turn
-#board.display
-#p "cnt="+cnt.to_s+":turn="+((turn == CROSS) ? "X" : "O")+":v="+temp_v.to_s+":i="+i.to_s
       if !check(board)
         teban = (turn == CROSS) ? NOUGHT : CROSS
         temp_v, temp_locate = lookahead(board, teban, value)
@@ -424,7 +479,6 @@ class Player
       end
 
     }
-#p "cross:cnt="+cnt.to_s+":value="+value.to_s+":locate="+locate.to_s
     return value, locate
   end
 
@@ -433,7 +487,6 @@ class Player
     queue = Array.new
 
     seq = 0
-#    pre = 0
     board.teban = CROSS
     set_dup(board); queue.push(board)
 
@@ -445,7 +498,6 @@ class Player
     while queue != [] do
       buf = queue.shift
       layer = 9 - buf.select{|b| !b}.size
-#p "layer=" + layer.to_s + ":seq=" + seq.to_s
       buf.each_with_index {|b, i|
         next if b
         temp = buf.clone
