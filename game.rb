@@ -175,27 +175,27 @@ class Game
   end
 
   def command(player)
-    # locate = player.trees.apply(@board)
+    locate = player.trees.apply(@board)
 
-    #人間役は常に機械学習ルーチンじゃない方
-    #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
-    unless player.human
-      locate = player.trees.apply(@board)
-    else
-      #最強DFSと対戦
-      rest = @board.select{|b| !b}.size
-      if rest == 9
-        locate = rand(9)
-      else
-        threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-        temp_v, locate = player.lookahead(@board, player.sengo, threshold)
-      end
-      #乱数と対戦
-      # locate = rand(9)
-      # while @board[locate] != nil
-      #   locate = rand(9)
-      # end
-    end
+    # #人間役は常に機械学習ルーチンじゃない方
+    # #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
+    # unless player.human
+    #   locate = player.trees.apply(@board)
+    # else
+    #   #最強DFSと対戦
+    #   rest = @board.select{|b| !b}.size
+    #   if rest == 9
+    #     locate = rand(9)
+    #   else
+    #     threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
+    #     temp_v, locate = player.lookahead(@board, player.sengo, threshold)
+    #   end
+    #   #乱数と対戦
+    #   # locate = rand(9)
+    #   # while @board[locate] != nil
+    #   #   locate = rand(9)
+    #   # end
+    # end
     if locate
       @board[locate] = player.sengo
       @board.move = locate
@@ -275,7 +275,7 @@ class Board < Array
   def self.restore_table
     @@restore_table
   end
-  
+
   def rotate_sym
     @@rotate_sym
   end
@@ -398,8 +398,7 @@ class Player
       return true if @duplication.has_key?(seed)
     }
     return true if check(temp)
-    seed = board.to_s
-    return @duplication.has_key?(seed)
+    return false
   end
 
   def set_dup(board)
