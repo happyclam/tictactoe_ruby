@@ -210,7 +210,7 @@ class Game
   def decision
     cross_win = false
     nought_win = false
-    @board.line.each {|l|
+    Board.lines.each {|l|
       piece = @board[l[0]]
       if (piece && piece == @board[l[1]] && piece == @board[l[2]])
         cross_win = true if (piece == CROSS)
@@ -244,7 +244,7 @@ class Board < Array
     [0, 3, 6, 1, 4, 7, 2, 5, 8],
     [8, 5, 2, 7, 4, 1, 6, 3, 0]
   ]
-  @@line = [
+  @@lines = [
     [0, 1, 2],
     [3, 4, 5],
     [6, 7, 8],
@@ -254,7 +254,7 @@ class Board < Array
     [0, 4, 8],
     [2, 4, 6]
   ]
-  @@weight = [1, 0, 1, 0, 2, 0, 1, 0, 1]
+  @@weights = [1, 0, 1, 0, 2, 0, 1, 0, 1]
   attr_accessor :teban
   attr_accessor :move
   def initialize(*args, &block)
@@ -268,8 +268,8 @@ class Board < Array
     }
   end
 
-  def self.weight
-    @@weight
+  def self.weights
+    @@weights
   end
 
   def self.restore_table
@@ -280,13 +280,13 @@ class Board < Array
     @@rotate_sym
   end
 
-  def line
-    @@line
+  def self.lines
+    @@lines
   end
 
   def droppable
     return false if (self.select{|b| !b}.size == 0)
-    @@line.each {|l|
+    @@lines.each {|l|
       piece = self[l[0]]
       if (piece && piece == self[l[1]] && piece == self[l[2]])
         return false
@@ -411,9 +411,9 @@ class Player
     nought = 0
     board.each_with_index {|p, i|
       if p == CROSS
-        cross += Board.weight[i]
+        cross += Board.weights[i]
       elsif p == NOUGHT
-        nought += Board.weight[i]
+        nought += Board.weights[i]
       end
     }
     return (cross - nought)
@@ -422,7 +422,7 @@ class Player
   #勝負がついたか、置き場所が無くなったらtrueを返す
   def check(board)
     return true if (board.select{|b| !b}.size == 0)
-    board.line.each {|l|
+    Board.lines.each {|l|
       piece = board[l[0]]
       if (piece && piece == board[l[1]] && piece == board[l[2]])
         return true
@@ -434,7 +434,7 @@ class Player
   def evaluation(board)
     cross_win = false
     nought_win = false
-    board.line.each {|l|
+    Board.lines.each {|l|
       piece = board[l[0]]
       if (piece && piece == board[l[1]] && piece == board[l[2]])
         cross_win = true if (piece == CROSS)
