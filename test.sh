@@ -9,8 +9,8 @@ do
         s=`expr $j \* 100`
         s=`expr $s + $i`
         t=$(printf "%03d" $j)
-        echo "Serial ${s}"  >> autolearn${t}.txt
-        ruby $DIR/learning.rb >> autolearn${t}.txt
+        echo "Serial ${s}" | tee -a autolearn${t}.txt
+        ruby $DIR/learning.rb | tee -a autolearn${t}.txt
     done
 done
 

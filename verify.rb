@@ -17,25 +17,25 @@ sente_player.prepare
 
 }
 
-p "============================================================"
-target = Board.new([nil, nil, nil, nil, nil, nil, nil, nil, nil])
-count = 0
-(0..8).each{|first|
-  target[first] = CROSS
-  (0..8).each{|second|
-    p "#{first} - #{second}"
-    if target[second] == nil
-      count += 1
-      target[second] = NOUGHT
-      target.display
-      buf, converted = sente_player.trees.search(target)
-      p buf.score if buf
-      target[second] = nil
-    end
-  }
-  target[first] = nil
-}
-p "count = #{count}"
+# p "============================================================"
+# target = Board.new([nil, nil, nil, nil, nil, nil, nil, nil, nil])
+# count = 0
+# (0..8).each{|first|
+#   target[first] = CROSS
+#   (0..8).each{|second|
+#     p "#{first} - #{second}"
+#     if target[second] == nil
+#       count += 1
+#       target[second] = NOUGHT
+#       target.display
+#       buf, converted = sente_player.trees.search(target)
+#       p buf.score if buf
+#       target[second] = nil
+#     end
+#   }
+#   target[first] = nil
+# }
+# p "count = #{count}"
 
 #p sente_player.trees.count(target)
 

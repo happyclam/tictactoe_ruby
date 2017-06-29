@@ -2,6 +2,7 @@
 #require "pry"
 #require "pp"
 require "pathname"
+require "bigdecimal"
 
 class Tree
   @@total = 0
@@ -11,7 +12,7 @@ class Tree
     @value = v
     @child = c
     #盤面が指定されている時は、すでに駒が置かれているところは
-    #選べないようにあらかじめ 0 をセットしておく
+    #選べないようにあらかじめ nil をセットしておく
     @score = v.clone
     @score.map!{|v|
       unless v
@@ -20,6 +21,7 @@ class Tree
         v = nil
       end
     }
+    @score.distribute
     @@counter = 0
     @@total = 0
   end
@@ -32,17 +34,6 @@ class Tree
     return @@total
   end
 
-  #動作確認用
-  def show
-    p @@total
-    @value.display
-    @@total += 1
-    @child.each{|c|
-      c.show
-    }
-  end
-
-  #動作確認用
   #一つ目のパラメータで指定された局面データ（親）を探して、その子ノードとしてオブジェクトを追加する
   def add(target, obj)
     # p "Tree.add"
@@ -93,7 +84,7 @@ class Tree
     }
     return ret, converted
   end
-  #動作確認用
+
   def count(v)
     @child.each { |c|
       if c.value == v
@@ -103,19 +94,6 @@ class Tree
       end
     }
     @@counter
-  end
-  #動作確認用
-  def parent(v)
-    ret = nil
-    @child.each { |c|
-      if c.value == v
-        ret = self
-      else
-        ret = c.parent(v)
-      end
-      break if ret
-    }
-    return ret
   end
 
   def self.read(path)
@@ -141,6 +119,7 @@ class Tree
   private
   def overlapped(src, dest)
     temp = dest.clone
+ #   p "rotate_sym = #{temp.rotate_sym}"
     temp.rotate_sym.each_with_index{|v, i|
       buf = Array.new(temp.length, nil)
       dest.each_with_index{|value, l|
@@ -152,7 +131,9 @@ class Tree
   end
   def idx(score)
     ret = nil
-    index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum} * 10) / 10.0
+    # index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum} * 10) / 10.0
+    # 合計1.0になるようにしたので計算をする必要がなくなった
+    index = rand(10) / 10.0
     start = 0
     score.each_with_index{|v, i|
       next unless v
@@ -175,33 +156,35 @@ class Game
   end
 
   def command(player)
-    locate = player.trees.apply(@board)
+    # locate = player.trees.apply(@board)
 
-    # #人間役は常に機械学習ルーチンじゃない方
-    # #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
-    # unless player.human
-    #   locate = player.trees.apply(@board)
-    # else
-    #   #最強DFSと対戦
-    #   rest = @board.select{|b| !b}.size
-    #   if rest == 9
-    #     locate = rand(9)
-    #   else
-    #     threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-    #     temp_v, locate = player.lookahead(@board, player.sengo, threshold)
-    #   end
-    #   #乱数と対戦
-    #   # locate = rand(9)
-    #   # while @board[locate] != nil
-    #   #   locate = rand(9)
-    #   # end
-    # end
+    #人間役は常に機械学習ルーチンじゃない方
+    #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
+    unless player.human
+      locate = player.trees.apply(@board)
+    else
+      # #最強DFSと対戦
+      # rest = @board.select{|b| !b}.size
+      # if rest == 9
+      #   locate = rand(9)
+      # else
+      #   threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
+      #   temp_v, locate = player.lookahead(@board, player.sengo, threshold)
+      # end
+      #乱数と対戦
+      locate = rand(9)
+      while @board[locate] != nil
+        locate = rand(9)
+      end
+    end
     if locate
       @board[locate] = player.sengo
       @board.move = locate
       @history.push(@board.clone)
       return true
     else
+      p "--- Error ---------------------"
+      exit
       return false
     end
 
@@ -262,10 +245,12 @@ class Board < Array
     @teban = CROSS
   end
 
-  def init
-    self.each_with_index {|n, i|
-      self[i] = nil
-    }
+  def distribute
+    c = self.compact.max
+    exp_a = self.map{|v| Math.exp(v - c) if v}
+    sum_exp_a = exp_a.inject(0){|sum, n| (n) ? sum + n : sum}
+    exp_a.map!{|v| v / sum_exp_a if v}
+    self.map!.with_index{|v, i| exp_a[i]}
   end
 
   def self.weights
@@ -329,6 +314,73 @@ class Player
     @trees = nil
   end
 
+  # def update(x)
+  #   z1 = sigmoid(x)
+  #   y = softmax(z1)
+  #   return x.map.with_index{|v, i| (v) ? v - (LEARNING_RATIO * y[i]) : v}
+  # end
+
+  def update(x, t)
+    f = method(:loss)
+    inc = numerical_gradient(f, x, t)
+    return x.map!.with_index{|v, i| (v) ? v - (LEARNING_RATIO * inc[i]) : v}
+  end
+
+  def loss(x, t)
+    y = softmax(x)
+    return cross_entropy_error(y, t)
+  end
+
+  def differential(x)
+    return x[0]**2 + x[1]**2
+  end
+
+  # def numerical_gradient(f, x)
+  def numerical_gradient(f, x, t)
+    h = 1e-4
+    grad = Array.new(x.size, 0)
+    x.each_with_index{|v, i|
+      next unless v
+      tmp_val = x[i]
+      x[i] = tmp_val + h
+      fxh1 = f.call(x, t)
+      x[i] = tmp_val - h
+      fxh2 = f.call(x, t)
+      grad[i] = (fxh1 - fxh2) / (2 * h)
+      x[i] = tmp_val
+    }
+    return grad
+  end
+
+  def gradient_descent(f, init_x, lr=0.01, step_num=100)
+    x = init_x
+    step_num.times{|i|
+      grad = numerical_gradient(f, x)
+      x.map!.with_index{|v, i| v - (lr * grad[i])}
+    }
+    return x
+  end
+
+  def sigmoid(x)
+    return x.map!{|v| 1 / (1 + Math.exp(-v)) if v}
+  end
+
+  def softmax(a)
+    c = a.compact.max
+    exp_a = a.map{|v| Math.exp(v - c) if v}
+    sum_exp_a = exp_a.inject(0){|sum, n| (n) ? sum + n : sum}
+    return exp_a.map{|v| v / sum_exp_a if v}
+  end
+
+  def mean_squared_error(y, t)
+    return 0.5 * y.each_with_index.inject(0){|sum, (n,i)| (n) ? sum + (n - t[i])**2 : sum}
+  end
+
+  def cross_entropy_error(y, t)
+    delta = 1e-7
+    return -y.each_with_index.inject(0){|sum, (n,i)| (n) ? sum + (t[i] * Math.log(n + delta)) : sum}
+  end
+
   def prepare
     if File.exist?("./trees.dump")
       @trees = Tree::read("./trees.dump")
@@ -348,34 +400,23 @@ class Player
     #最後の手を取得してすぐにpopして一つ前の局面のscoreを更新する
     base = history.size.to_f
     while board
-      dose = history.size / base
-#      dose = 0.029 * 1.882 ** history.size
-#      dose = 0.188 * 1.588 ** history.size
-#      dose = (history.size <= 0) ? 0.1 : ((1.0 / base) + Math.log(history.size, base))
-      case result
-      when CROSS
-        inc = (@sengo == CROSS) ? (3.0 * dose) : (-1.0 * dose)
-      when DRAW
-        inc = 1.0
-      when NOUGHT
-        inc = (@sengo == NOUGHT) ? (3.0 * dose) : (-1.0 * dose)
-      end
       board = history.pop
-      # buf = @trees.search(board)
       buf, converted = @trees.search(board)
       restore_index = Board.restore_table[converted]
       if buf
-        # buf.score[pre_index] += inc if (@sengo == buf.value.teban)
-        buf.score[buf.value.rotate_sym[restore_index][pre_index]] += inc if (@sengo == buf.value.teban)
-        #石が０個になっていたら置ける箇所全てに追加（小数に対応するために0.1に変更）
-        # if buf.score[pre_index] <= 0.1
-        if buf.score[buf.value.rotate_sym[restore_index][pre_index]] <= 0.1
-          positive = buf.score.min_by{|v| v.to_i}
-          positive = positive ? (positive.abs + PEBBLES) : PEBBLES
-          buf.score.map!{|v|
-            v += positive if v
-          }
-        end
+        correct = buf.score.clone
+        correct.map!{|v| 0}
+        correct[buf.value.rotate_sym[restore_index][pre_index]] = 1.0
+        winner = case result
+                 when CROSS
+                   CROSS
+                 when DRAW
+                   (@sengo == CROSS) ? NOUGHT : CROSS
+                 when NOUGHT
+                   NOUGHT
+                 end
+        # update(buf.score, correct) if (@sengo != buf.value.teban)
+        update(buf.score, correct) if (buf.value.teban == winner)
         pre_index = board.move
       end
     end
@@ -476,7 +517,6 @@ class Player
         locate = i
         break if threshold > temp_v
       end
-
     }
     return value, locate
   end
@@ -497,12 +537,15 @@ class Player
     while queue != [] do
       buf = queue.shift
       layer = 9 - buf.select{|b| !b}.size
+# p "layer=" + layer.to_s + ":seq=" + seq.to_s
       buf.each_with_index {|b, i|
         next if b
         temp = buf.clone
         temp[i] = buf.teban
         #重複データを削除しているので、Treeデータ生成時のmoveは意味がない
         temp.move = nil
+        # p "temp = #{temp}"
+        # p "temp.to_s = #{temp.to_s}"
         next if check_dup(temp)
         seq += 1
         case layer
