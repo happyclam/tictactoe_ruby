@@ -2,6 +2,7 @@
 #require "pry"
 #require "pp"
 require "pathname"
+require "bigdecimal"
 
 class Tree
   @@total = 0
@@ -11,7 +12,7 @@ class Tree
     @value = v
     @child = c
     #盤面が指定されている時は、すでに駒が置かれているところは
-    #選べないようにあらかじめ 0 をセットしておく
+    #選べないようにあらかじめ nil をセットしておく
     @score = v.clone
     @score.map!{|v|
       unless v
@@ -30,16 +31,6 @@ class Tree
 
   def total
     return @@total
-  end
-
-  #動作確認用
-  def show
-    p @@total
-    @value.display
-    @@total += 1
-    @child.each{|c|
-      c.show
-    }
   end
 
   #動作確認用
@@ -93,7 +84,7 @@ class Tree
     }
     return ret, converted
   end
-  #動作確認用
+
   def count(v)
     @child.each { |c|
       if c.value == v
@@ -103,19 +94,6 @@ class Tree
       end
     }
     @@counter
-  end
-  #動作確認用
-  def parent(v)
-    ret = nil
-    @child.each { |c|
-      if c.value == v
-        ret = self
-      else
-        ret = c.parent(v)
-      end
-      break if ret
-    }
-    return ret
   end
 
   def self.read(path)
@@ -190,7 +168,7 @@ class Game
     #     threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
     #     temp_v, locate = player.lookahead(@board, player.sengo, threshold)
     #   end
-    #   #乱数と対戦
+    #   # #乱数と対戦
     #   # locate = rand(9)
     #   # while @board[locate] != nil
     #   #   locate = rand(9)
@@ -260,16 +238,17 @@ class Board < Array
   def initialize(*args, &block)
     super(*args, &block)
     @teban = CROSS
+    @move = nil
+  end
+
+  def self.weights
+    @@weights
   end
 
   def init
     self.each_with_index {|n, i|
       self[i] = nil
     }
-  end
-
-  def self.weights
-    @@weights
   end
 
   def self.restore_table
@@ -361,19 +340,19 @@ class Player
         inc = (@sengo == NOUGHT) ? (3.0 * dose) : (-1.0 * dose)
       end
       board = history.pop
-      # buf = @trees.search(board)
       buf, converted = @trees.search(board)
       restore_index = Board.restore_table[converted]
       if buf
-        # buf.score[pre_index] += inc if (@sengo == buf.value.teban)
         buf.score[buf.value.rotate_sym[restore_index][pre_index]] += inc if (@sengo == buf.value.teban)
-        #石が０個になっていたら置ける箇所全てに追加（小数に対応するために0.1に変更）
-        # if buf.score[pre_index] <= 0.1
         if buf.score[buf.value.rotate_sym[restore_index][pre_index]] <= 0.1
           positive = buf.score.min_by{|v| v.to_i}
           positive = positive ? (positive.abs + PEBBLES) : PEBBLES
           buf.score.map!{|v|
             v += positive if v
+          }
+        elsif buf.score[buf.value.rotate_sym[restore_index][pre_index]] > 100
+          buf.score.map!{|v|
+            v = BigDecimal((v / 10).to_s).ceil(3).to_f if v
           }
         end
         pre_index = board.move
@@ -467,14 +446,18 @@ class Player
         temp_v = evaluation(board)
       end
       board[i] = nil
-      if (temp_v >= value && turn == CROSS)
+      if (temp_v > value && turn == CROSS)
         value = temp_v
         locate = i
         break if threshold < temp_v
-      elsif (temp_v <= value && turn == NOUGHT)
+      elsif (temp_v < value && turn == NOUGHT)
         value = temp_v
         locate = i
         break if threshold > temp_v
+      elsif (temp_v == value)
+        if rand(2) == 1 || locate == nil
+          locate = i
+        end
       end
 
     }
@@ -497,12 +480,15 @@ class Player
     while queue != [] do
       buf = queue.shift
       layer = 9 - buf.select{|b| !b}.size
+# p "layer=" + layer.to_s + ":seq=" + seq.to_s
       buf.each_with_index {|b, i|
         next if b
         temp = buf.clone
         temp[i] = buf.teban
         #重複データを削除しているので、Treeデータ生成時のmoveは意味がない
         temp.move = nil
+        # p "temp = #{temp}"
+        # p "temp.to_s = #{temp.to_s}"
         next if check_dup(temp)
         seq += 1
         case layer
