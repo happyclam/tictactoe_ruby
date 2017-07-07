@@ -245,6 +245,12 @@ class Board < Array
     @teban = CROSS
   end
 
+  def init
+    self.each_with_index {|n, i|
+      self[i] = nil
+    }
+  end
+
   def distribute
     c = self.compact.max
     exp_a = self.map{|v| Math.exp(v - c) if v}
@@ -400,23 +406,23 @@ class Player
     #最後の手を取得してすぐにpopして一つ前の局面のscoreを更新する
     base = history.size.to_f
     while board
+      case result
+      when CROSS
+        inc = (@sengo == CROSS) ? 3.0 : -1.0
+      when DRAW
+        inc = 1.0
+      when NOUGHT
+        inc = (@sengo == NOUGHT) ? 3.0 : -1.0
+      end
       board = history.pop
       buf, converted = @trees.search(board)
       restore_index = Board.restore_table[converted]
       if buf
-        correct = buf.score.clone
-        correct.map!{|v| 0}
-        correct[buf.value.rotate_sym[restore_index][pre_index]] = 1.0
-        winner = case result
-                 when CROSS
-                   CROSS
-                 when DRAW
-                   (@sengo == CROSS) ? NOUGHT : CROSS
-                 when NOUGHT
-                   NOUGHT
-                 end
-        # update(buf.score, correct) if (@sengo != buf.value.teban)
-        update(buf.score, correct) if (buf.value.teban == winner)
+        good_bad = buf.score.clone
+        # good_bad.map!{|v| if v then 0 else nil end}
+        good_bad.map!{|v| 0}
+        good_bad[buf.value.rotate_sym[restore_index][pre_index]] = inc
+        update(buf.score, good_bad) if (@sengo == buf.value.teban)
         pre_index = board.move
       end
     end
