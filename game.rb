@@ -129,15 +129,34 @@ class Tree
     }
     return nil
   end
+  def normal(score)
+    min = score.select{|o| !o.nil?}.min
+    max = score.select{|o| !o.nil?}.max
+    if min < 0
+      return score.map{|o| if !o.nil? then (o - min) / (max - min) else nil end}
+    else
+      return score
+    end
+  end
   def idx(score)
     ret = nil
     # index = rand(score.inject(0){|sum, n| (n) ? sum + n : sum} * 10) / 10.0
     # 合計1.0になるようにしたので計算をする必要がなくなった
-    index = rand(10) / 10.0
+    # index = rand(10) / 10.0
+    # 学習データ更新用
+    # dest = normal(score)
+    # 対戦用
+    dest = score
+    sum = dest.inject(0){|sum, n| (n) ? sum + n : sum}
+    # sum = dest.select{|o| !o.nil?}.inject(:+)
+    random = Random.new()
+    index = random.rand(sum)
+    # p "index=#{index}"
     start = 0
-    score.each_with_index{|v, i|
+    dest.each_with_index{|v, i|
       next unless v
       start += v
+      # p "start=#{start}"
       if start > index
         ret = i
         break
@@ -156,27 +175,29 @@ class Game
   end
 
   def command(player)
-    locate = player.trees.apply(@board)
+    # locate = player.trees.apply(@board)
 
-    # #人間役は常に機械学習ルーチンじゃない方
-    # #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
-    # unless player.human
-    #   locate = player.trees.apply(@board)
-    # else
-    #   # #最強DFSと対戦
-    #   # rest = @board.select{|b| !b}.size
-    #   # if rest == 9
-    #   #   locate = rand(9)
-    #   # else
-    #   #   threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
-    #   #   temp_v, locate = player.lookahead(@board, player.sengo, threshold)
-    #   # end
-    #   #乱数と対戦
-    #   locate = rand(9)
-    #   while @board[locate] != nil
-    #     locate = rand(9)
-    #   end
-    # end
+    #人間役は常に機械学習ルーチンじゃない方
+    #(=ソフト同志対戦させる時は常に機械学習ルーチンじゃ無い方のhumanプロパティをtrueにする)
+    unless player.human
+      locate = player.trees.apply(@board)
+    else
+      # # 自己対戦
+      # locate = player.trees.apply(@board)
+      #最強DFSと対戦
+      rest = @board.select{|b| !b}.size
+      if rest == 9
+        locate = rand(9)
+      else
+        threshold = (player.sengo == CROSS) ? MAX_VALUE : MIN_VALUE
+        temp_v, locate = player.lookahead(@board, player.sengo, threshold)
+      end
+      # #乱数と対戦
+      # locate = rand(9)
+      # while @board[locate] != nil
+      #   locate = rand(9)
+      # end
+    end
     if locate
       @board[locate] = player.sengo
       @board.move = locate
@@ -514,14 +535,18 @@ class Player
         temp_v = evaluation(board)
       end
       board[i] = nil
-      if (temp_v >= value && turn == CROSS)
+      if (temp_v > value && turn == CROSS)
         value = temp_v
         locate = i
         break if threshold < temp_v
-      elsif (temp_v <= value && turn == NOUGHT)
+      elsif (temp_v < value && turn == NOUGHT)
         value = temp_v
         locate = i
         break if threshold > temp_v
+      elsif temp_v == value
+        if rand(2) == 1 || locate == nil
+          locate = i
+        end
       end
     }
     return value, locate

@@ -13,6 +13,7 @@ p "0"
   @sente_player = Player.new(CROSS, true)
   @gote_player = Player.new(NOUGHT, false)
   @gote_player.prepare
+  @sente_player.prepare
   @human = @sente_player
   @CPU = @gote_player
 else
@@ -20,6 +21,7 @@ p "1"
   @sente_player = Player.new(CROSS, false)
   @gote_player = Player.new(NOUGHT, true)
   @sente_player.prepare
+  @gote_player.prepare
   @human = @gote_player
   @CPU = @sente_player
 end
@@ -74,4 +76,4 @@ when NOUGHT
   end
 end
 
-@CPU.learning(ret, g.history)
+# @CPU.learning(ret, g.history)
